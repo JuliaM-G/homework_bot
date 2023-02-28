@@ -31,6 +31,7 @@ def check_tokens():
 
 def send_message(bot, message):
     """Отправка сообщений."""
+    logger.info('Сообщение отправлено')
     try:
         bot.send_message(TELEGRAM_CHAT_ID, message)
         logger.debug(
@@ -49,9 +50,9 @@ def get_api_answer(timestamp):
     }
     try:
         logging.info(
-            'Начало запроса: url = {url},'
-            'headers = {headers},'
-            'params = {params}'.format(**params_request),
+            f'Начало запроса: url = {ENDPOINT},'
+            f'headers = {HEADERS},'
+            f'params = {params_request}',
         )
         homework_statuses = requests.get(**params_request)
         if homework_statuses.status_code != HTTPStatus.OK:
@@ -64,9 +65,9 @@ def get_api_answer(timestamp):
         return homework_statuses.json()
     except Exception:
         raise exceptions.ConnectinError(
-            'Неверный код ответа: url = {url},'
-            'headers = {headers},'
-            'params = {params}'.format(**params_request),
+            f'Неверный код ответа: url = {ENDPOINT},'
+            f'headers = {HEADERS},'
+            f'params = {params_request}',
         )
 
 
@@ -85,21 +86,15 @@ def check_response(response):
 
 def parse_status(homework):
     """Извлечение информации о статусе работы."""
-    try:
-        homework_name = homework['homework_name']
-        homework_status = homework['status']
-    except KeyError as error:
-        message = f'Ключ {error} не найден в информации о домашней работе'
-        logger.error(message)
-        raise KeyError(message)
-    try:
-        verdict = HOMEWORK_VERDICTS[homework_status]
-        logger.info('Сообщение подготовлено для отправки')
-    except KeyError as error:
-        message = f'Неизвестный статус домашней работы {error}'
-        logger.error(message)
-        raise exceptions.UnknownStatus(message)
-
+    homework_name = homework.get('homework_name')
+    if 'homework_name' not in homework:
+        raise KeyError('Такой домашней работы нет')
+    homework_status = homework.get('status')
+    if 'status' not in homework:
+        raise exceptions.UnknownStatus('Неизвестный статус работы')
+    if homework_status not in HOMEWORK_VERDICTS:
+        raise KeyError('Неизвестный статус работы')
+    verdict = HOMEWORK_VERDICTS[homework_status]
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
 
@@ -131,10 +126,6 @@ def main():
                 send_message(bot, message=status)
             else:
                 logging.debug('Статус не изменился')
-        except exceptions.NotForSending as error:
-            message = f'Сбой в работе программы: {error}'
-            logging.error(message)
-
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
             last_message = status
